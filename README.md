@@ -50,13 +50,13 @@ The game includes built-in music using **WebAudio** (no external files).
 > Replace the placeholders below with your own screenshots.
 
 ### Start Menu
-![Start Menu](./screenshots/start-menu.png)
+![Start Menu](./start-menu.png)
 
 ### Gameplay
-![Gameplay](./screenshots/gameplay.png)
+![Gameplay](./gameplay.png)
 
 ### Win / Lose Screen
-![Win Lose](./screenshots/result.png)
+![Win Lose](./result.png)
 
 ---
 
