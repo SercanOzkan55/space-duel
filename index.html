@@ -3,21 +3,47 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Neon Space Duel</title>
+  <title>Neon Space Duel — AI</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="wrap">
     <header>
       <h1>NEON SPACE DUEL</h1>
-      <p>
-        <span class="kbd">P1</span> WASD + <b>F</b> Shoot
-        <span class="sep">|</span>
-        <span class="kbd">P2</span> Arrows + <b>/</b> Shoot
-      </p>
+
+      <div class="topbar">
+        <div class="help">
+          <span class="kbd">WASD</span> Move
+          <span class="sep">|</span>
+          <span class="kbd">Space</span> Jump
+          <span class="sep">|</span>
+          <span class="kbd">F</span> Shoot
+        </div>
+
+        <div class="namebox">
+          <label for="pname">Name</label>
+          <input id="pname" maxlength="12" placeholder="Sercan?" />
+          <button id="applyName" class="btn">Apply</button>
+        </div>
+      </div>
     </header>
 
-    <canvas id="c" width="980" height="420"></canvas>
+    <div class="stage">
+      <canvas id="c" width="980" height="420"></canvas>
+
+      <!-- Win/Lose Overlay -->
+      <div id="overlay" class="overlay hidden">
+        <div class="panel">
+          <div id="resultTitle" class="resultTitle">YOU WIN</div>
+          <div id="resultSub" class="resultSub">Score 0:0</div>
+          <div class="panelBtns">
+            <button id="restartBtn" class="btn big">Restart</button>
+            <button id="closeBtn" class="btn ghost">Close</button>
+          </div>
+          <div class="tinyHint">Tip: Jump dodges bullets. AI learns your rhythm 👀</div>
+        </div>
+      </div>
+    </div>
 
     <footer>
       <span id="status">First to 5 wins. No blood, just lasers ✨</span>
@@ -28,6 +54,16 @@
 (() => {
   const canvas = document.getElementById("c");
   const ctx = canvas.getContext("2d");
+
+  const statusEl = document.getElementById("status");
+  const overlay = document.getElementById("overlay");
+  const resultTitle = document.getElementById("resultTitle");
+  const resultSub = document.getElementById("resultSub");
+  const restartBtn = document.getElementById("restartBtn");
+  const closeBtn = document.getElementById("closeBtn");
+
+  const nameInput = document.getElementById("pname");
+  const applyName = document.getElementById("applyName");
 
   // HiDPI
   const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
@@ -55,41 +91,78 @@
   });
   window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
 
-  // Stars
+  // Stars (use base coords then scale in draw)
   const stars = Array.from({length: 140}, () => ({
     x: Math.random() * 980,
     y: Math.random() * 420,
     r: Math.random() * 1.6 + 0.2,
-    s: Math.random() * 0.5 + 0.1
+    s: Math.random() * 0.6 + 0.1
   }));
 
   const neon = {
     cyan: "#00E5FF",
     deep: "#06121f",
-    white: "#eaf7ff"
+    white: "#eaf7ff",
+    purple: "#A78BFA",
+    red: "#FF3D81",
+    green: "#33FFB1"
   };
 
   const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+  const lerp = (a,b,t)=>a+(b-a)*t;
 
-  function makePlayer(x, color, controls) {
+  // Physics
+  const groundY = () => H() - 18;
+
+  function makePlayer(x, color, controls, isAI=false) {
     return {
-      x, y: 0,
+      x, y: groundY(),
       vx: 0, vy: 0,
       w: 26, h: 46,
+
       hp: 100,
       score: 0,
+
       face: 1,
       color,
-      cd: 0,
-      controls
+
+      cd: 0,          // shoot cooldown frames
+      jumpCd: 0,      // jump buffer
+      onGround: true,
+
+      label: isAI ? "AI" : "P1",
+      controls,
+      isAI,
+
+      // AI memory / tuning
+      ai: {
+        jitter: 0,
+        aimBias: (Math.random()*2-1) * 10,
+        aggression: 0.65,     // shoot tendency
+        dodge: 0.85,          // dodge tendency
+        strafe: 0.55          // move left-right tendency
+      }
     };
   }
 
+  // Player1
   const p1 = makePlayer(110, neon.cyan, {
-    left:"a", right:"d", up:"w", down:"s", shoot:"f"
+    left:"a", right:"d", up:"w", down:"s", shoot:"f", jump:" "
+  }, false);
+
+  // Enemy AI (replaces Player2)
+  const bot = makePlayer(980-110, neon.purple, null, true);
+  bot.face = -1;
+
+  let playerName = "P1";
+  applyName.addEventListener("click", () => {
+    const v = (nameInput.value || "").trim();
+    playerName = v.length ? v.slice(0,12) : "P1";
+    p1.label = playerName;
+    statusEl.textContent = `Name set: ${playerName}. First to 5 wins.`;
   });
-  const p2 = makePlayer(980-110, "#A78BFA", {
-    left:"arrowleft", right:"arrowright", up:"arrowup", down:"arrowdown", shoot:"/"
+  nameInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") applyName.click();
   });
 
   const bullets = [];
@@ -99,30 +172,62 @@
 
     const speed = 9.5;
     const bx = p.x + p.face * (p.w/2 + 8);
-    const by = p.y - p.h*0.15;
+    const by = p.y - p.h*0.55;
 
     bullets.push({
       x: bx, y: by,
       vx: p.face * speed,
       vy: 0,
       r: 3.2,
-      life: 90,
+      life: 95,
       color: p.color,
       owner: p
     });
   }
 
+  function jump(p) {
+    if (!p.onGround) return;
+    p.onGround = false;
+    p.vy = -11.2; // jump impulse
+  }
+
   function resetRound(winner) {
-    p1.x = 110; p1.y = 0; p1.vx = p1.vy = 0; p1.hp = 100; p1.face = 1; p1.cd = 0;
-    p2.x = W()-110; p2.y = 0; p2.vx = p2.vy = 0; p2.hp = 100; p2.face = -1; p2.cd = 0;
+    p1.x = 110; p1.y = groundY(); p1.vx = p1.vy = 0; p1.hp = 100; p1.face = 1; p1.cd = 0; p1.onGround = true;
+    bot.x = W()-110; bot.y = groundY(); bot.vx = bot.vy = 0; bot.hp = 100; bot.face = -1; bot.cd = 0; bot.onGround = true;
     bullets.length = 0;
+
     if (winner) {
       winner.score++;
-      document.getElementById("status").textContent =
-        `Point for ${winner===p1?"P1":"P2"} — Score ${p1.score}:${p2.score}`;
+      statusEl.textContent = `Point for ${winner===p1 ? playerName : "AI"} — Score ${p1.score}:${bot.score}`;
     } else {
-      document.getElementById("status").textContent = `First to 5 wins.`;
+      statusEl.textContent = `First to 5 wins.`;
     }
+  }
+
+  function resetMatch() {
+    p1.score = 0;
+    bot.score = 0;
+    hideOverlay();
+    resetRound(null);
+  }
+
+  restartBtn.addEventListener("click", resetMatch);
+  closeBtn.addEventListener("click", hideOverlay);
+
+  function showOverlay(type) {
+    // type: "win" | "lose"
+    overlay.classList.remove("hidden");
+    if (type === "win") {
+      resultTitle.textContent = "YOU WIN";
+      resultTitle.dataset.type = "win";
+    } else {
+      resultTitle.textContent = "YOU LOSE";
+      resultTitle.dataset.type = "lose";
+    }
+    resultSub.textContent = `Final Score ${p1.score}:${bot.score}`;
+  }
+  function hideOverlay() {
+    overlay.classList.add("hidden");
   }
 
   resetRound();
@@ -134,9 +239,9 @@
     return dx*dx + dy*dy <= cr*cr;
   }
 
-  function updatePlayer(p) {
-    const acc = 0.65;
-    const maxV = 6.2;
+  function updatePlayerHuman(p) {
+    const acc = 0.72;
+    const maxV = 6.6;
     const friction = 0.86;
 
     const L = keys.has(p.controls.left);
@@ -144,27 +249,134 @@
     const U = keys.has(p.controls.up);
     const D = keys.has(p.controls.down);
     const S = keys.has(p.controls.shoot);
+    const J = keys.has(p.controls.jump);
 
     if (L) p.vx -= acc;
     if (R) p.vx += acc;
-    if (U) p.vy -= acc;
-    if (D) p.vy += acc;
+    if (U) p.vy -= 0.25; // tiny "float" feel (optional)
+    if (D) p.vy += 0.25;
+
+    // Jump buffer
+    if (p.jumpCd > 0) p.jumpCd--;
+    if (J && p.onGround && p.jumpCd === 0) {
+      p.jumpCd = 10;
+      jump(p);
+    }
 
     p.vx *= friction;
-    p.vy *= friction;
     p.vx = clamp(p.vx, -maxV, maxV);
-    p.vy = clamp(p.vy, -maxV, maxV);
+
+    // gravity
+    if (!p.onGround) p.vy += 0.62;
+    p.vy = clamp(p.vy, -12, 12);
 
     p.x += p.vx;
     p.y += p.vy;
 
     p.x = clamp(p.x, 18, W()-18);
-    p.y = clamp(p.y, -10, H()-18);
 
-    p.face = (p===p1 ? (p2.x>p1.x?1:-1) : (p1.x>p2.x?1:-1));
+    // ground collision
+    if (p.y >= groundY()) {
+      p.y = groundY();
+      p.vy = 0;
+      p.onGround = true;
+    }
+
+    // face enemy
+    p.face = (bot.x > p.x ? 1 : -1);
 
     if (p.cd > 0) p.cd--;
     if (S) shoot(p);
+  }
+
+  function nearestThreatTo(p) {
+    // find nearest enemy bullet heading towards p
+    let best = null;
+    let bestT = 1e9;
+    for (const b of bullets) {
+      if (b.owner === p) continue;
+      const toward = Math.sign(b.vx) === Math.sign(p.x - b.x);
+      if (!toward) continue;
+      const dx = Math.abs(b.x - p.x);
+      if (dx < bestT) {
+        bestT = dx;
+        best = b;
+      }
+    }
+    return best;
+  }
+
+  function updateBotAI(p) {
+    // Lightweight behavior:
+    // - keep distance
+    // - strafe
+    // - dodge bullets by jumping or moving
+    // - shoot when aligned
+
+    const target = p1;
+    const acc = 0.62;
+    const maxV = 6.1;
+    const friction = 0.88;
+
+    const dist = target.x - p.x;
+
+    // Face target
+    p.face = (target.x > p.x ? 1 : -1);
+
+    // Basic spacing: try to keep ~280px
+    const desired = 280;
+    const tooClose = Math.abs(dist) < desired * 0.75;
+    const tooFar   = Math.abs(dist) > desired * 1.25;
+
+    // Threat detection
+    const threat = nearestThreatTo(p);
+    const threatNear = threat && Math.abs(threat.x - p.x) < 140 && Math.abs(threat.y - p.y) < 70;
+
+    // Movement intent
+    let move = 0; // -1 left, +1 right
+    if (tooClose) move = -Math.sign(dist);    // back off
+    else if (tooFar) move = Math.sign(dist);  // chase
+    else {
+      // strafe
+      p.ai.jitter += (Math.random() - 0.5) * 0.25;
+      p.ai.jitter = clamp(p.ai.jitter, -1, 1);
+      if (Math.random() < p.ai.strafe) move = Math.sign(p.ai.jitter);
+    }
+
+    // Dodge: if bullet approaching, step aside / jump
+    if (threatNear && Math.random() < p.ai.dodge) {
+      move = Math.sign((p.x - threat.x) || 1); // move away from bullet x
+      if (p.onGround && Math.random() < 0.55) jump(p);
+    }
+
+    // Apply movement
+    p.vx += move * acc;
+    p.vx *= friction;
+    p.vx = clamp(p.vx, -maxV, maxV);
+
+    // gravity
+    if (!p.onGround) p.vy += 0.62;
+    p.vy = clamp(p.vy, -12, 12);
+
+    p.x += p.vx;
+    p.y += p.vy;
+
+    p.x = clamp(p.x, 18, W()-18);
+
+    if (p.y >= groundY()) {
+      p.y = groundY();
+      p.vy = 0;
+      p.onGround = true;
+    }
+
+    // Shoot logic: shoot if roughly aligned and random aggression
+    const aimY = (target.y - target.h*0.55) - (p.y - p.h*0.55);
+    const aligned = Math.abs(aimY) < 22; // since bullets go straight
+    const hasLine = Math.abs(dist) < 520; // range
+    const wants = Math.random() < (0.05 + 0.08*p.ai.aggression);
+
+    if (p.cd > 0) p.cd--;
+    if (aligned && hasLine && wants) shoot(p);
   }
 
   function updateBullets() {
@@ -174,27 +386,29 @@
       b.y += b.vy;
       b.life--;
 
-      if (b.life <= 0 || b.x < -40 || b.x > W()+40) {
+      if (b.life <= 0 || b.x < -60 || b.x > W()+60) {
         bullets.splice(i, 1);
         continue;
       }
 
-      const target = (b.owner === p1) ? p2 : p1;
+      const target = (b.owner === p1) ? bot : p1;
       const rx = target.x - target.w/2;
       const ry = target.y - target.h;
 
       if (rectHitCircle(rx, ry, target.w, target.h, b.x, b.y, b.r + 2)) {
         target.hp -= 12;
-        target.vx += Math.sign(b.vx) * 1.2;
+        target.vx += Math.sign(b.vx) * 1.25;
         bullets.splice(i, 1);
 
         if (target.hp <= 0) {
-          const winner = (target === p1) ? p2 : p1;
+          const winner = (target === p1) ? bot : p1;
+
+          // point
           if (winner.score >= 4) {
             winner.score++;
-            document.getElementById("status").textContent =
-              `🏆 ${winner===p1?"P1":"P2"} WINS ${p1.score}:${p2.score} — Refresh to restart`;
             running = false;
+            statusEl.textContent = `Match over — Final ${p1.score}:${bot.score}`;
+            showOverlay(winner === p1 ? "win" : "lose");
           } else {
             resetRound(winner);
           }
@@ -220,6 +434,7 @@
     const x = p.x, y = p.y;
     const bodyTop = y - p.h;
 
+    // hover ring
     ctx.save();
     ctx.shadowColor = p.color;
     ctx.shadowBlur = 18;
@@ -233,6 +448,7 @@
     ctx.save();
     ctx.translate(x, bodyTop + 14);
 
+    // head
     ctx.save();
     ctx.shadowColor = p.color;
     ctx.shadowBlur = 16;
@@ -245,6 +461,7 @@
     ctx.stroke();
     ctx.restore();
 
+    // visor
     ctx.save();
     ctx.fillStyle = "rgba(0,229,255,0.10)";
     ctx.beginPath();
@@ -252,6 +469,7 @@
     ctx.fill();
     ctx.restore();
 
+    // body
     ctx.save();
     ctx.strokeStyle = neon.white;
     ctx.globalAlpha = 0.8;
@@ -262,10 +480,12 @@
     ctx.stroke();
     ctx.restore();
 
+    // arm + gun
     const armY = 16;
     const gunX = p.face * 14;
     glowLine(0, armY, gunX, armY, p.color, 2);
 
+    // legs
     ctx.save();
     ctx.strokeStyle = neon.white;
     ctx.globalAlpha = 0.7;
@@ -276,6 +496,7 @@
     ctx.stroke();
     ctx.restore();
 
+    // label
     ctx.save();
     ctx.fillStyle = neon.white;
     ctx.globalAlpha = 0.85;
@@ -284,31 +505,45 @@
     ctx.fillText(label, 0, -16);
     ctx.restore();
 
+    // HP tiny pip glow when low
+    if (p.hp <= 28) {
+      ctx.save();
+      ctx.globalAlpha = 0.85;
+      glowLine(-10, -10, 10, -10, neon.red, 2);
+      ctx.restore();
+    }
+
     ctx.restore();
   }
 
   function drawUI() {
     const barW = 220, barH = 10;
+
     function hpBar(x, y, hp, color) {
       ctx.save();
       ctx.fillStyle = "rgba(234,247,255,0.08)";
       ctx.fillRect(x, y, barW, barH);
-      ctx.fillStyle = color;
-      ctx.shadowColor = color;
+
+      const ratio = clamp(hp/100,0,1);
+      const glowColor = ratio < 0.3 ? neon.red : color;
+
+      ctx.fillStyle = glowColor;
+      ctx.shadowColor = glowColor;
       ctx.shadowBlur = 14;
-      ctx.fillRect(x, y, barW * clamp(hp/100,0,1), barH);
+      ctx.fillRect(x, y, barW * ratio, barH);
       ctx.restore();
     }
+
     hpBar(14, 14, p1.hp, p1.color);
-    hpBar(W()-14-barW, 14, p2.hp, p2.color);
+    hpBar(W()-14-barW, 14, bot.hp, bot.color);
 
     ctx.save();
     ctx.fillStyle = neon.white;
-    ctx.globalAlpha = 0.9;
+    ctx.globalAlpha = 0.92;
     ctx.font = "14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
-    ctx.fillText(`P1 ${p1.score}`, 14, 46);
+    ctx.fillText(`${p1.label} ${p1.score}`, 14, 46);
     ctx.textAlign = "right";
-    ctx.fillText(`P2 ${p2.score}`, W()-14, 46);
+    ctx.fillText(`AI ${bot.score}`, W()-14, 46);
     ctx.restore();
   }
 
@@ -322,6 +557,7 @@
     for (const s of stars) {
       s.x -= s.s;
       if (s.x < -2) { s.x = W()+2; s.y = Math.random()*H(); }
+
       ctx.save();
       ctx.fillStyle = "rgba(234,247,255,0.7)";
       ctx.globalAlpha = 0.25 + 0.25*Math.sin((t*0.002)+(s.y*0.01));
@@ -349,26 +585,19 @@
   }
 
   let running = true;
-  let last = performance.now();
 
   function loop(now) {
-    last = now;
-
     drawBackground(now);
 
     if (running) {
-      updatePlayer(p1);
-      updatePlayer(p2);
+      updatePlayerHuman(p1);
+      updateBotAI(bot);
       updateBullets();
     }
 
-    // Ground
-    p1.y = H()-18;
-    p2.y = H()-18;
-
     drawBullets();
-    drawPlayer(p1, "P1");
-    drawPlayer(p2, "P2");
+    drawPlayer(p1, p1.label);
+    drawPlayer(bot, "AI");
     drawUI();
 
     requestAnimationFrame(loop);
