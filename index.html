@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Neon Space Duel</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>NEON SPACE DUEL</h1>
+      <p>
+        <span class="kbd">P1</span> WASD + <b>F</b> Shoot
+        <span class="sep">|</span>
+        <span class="kbd">P2</span> Arrows + <b>/</b> Shoot
+      </p>
+    </header>
+
+    <canvas id="c" width="980" height="420"></canvas>
+
+    <footer>
+      <span id="status">First to 5 wins. No blood, just lasers ✨</span>
+    </footer>
+  </div>
+
+<script>
+(() => {
+  const canvas = document.getElementById("c");
+  const ctx = canvas.getContext("2d");
+
+  // HiDPI
+  const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  function resize() {
+    const cssW = Math.min(980, window.innerWidth - 24);
+    const cssH = Math.round(cssW * 0.43);
+    canvas.style.width = cssW + "px";
+    canvas.style.height = cssH + "px";
+    canvas.width = Math.floor(cssW * dpr);
+    canvas.height = Math.floor(cssH * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  const W = () => parseInt(canvas.style.width);
+  const H = () => parseInt(canvas.style.height);
+
+  // Controls
+  const keys = new Set();
+  window.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    keys.add(k);
+    if (["arrowup","arrowdown","arrowleft","arrowright"," "].includes(e.key)) e.preventDefault();
+  });
+  window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
+
+  // Stars
+  const stars = Array.from({length: 140}, () => ({
+    x: Math.random() * 980,
+    y: Math.random() * 420,
+    r: Math.random() * 1.6 + 0.2,
+    s: Math.random() * 0.5 + 0.1
+  }));
+
+  const neon = {
+    cyan: "#00E5FF",
+    deep: "#06121f",
+    white: "#eaf7ff"
+  };
+
+  const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+
+  function makePlayer(x, color, controls) {
+    return {
+      x, y: 0,
+      vx: 0, vy: 0,
+      w: 26, h: 46,
+      hp: 100,
+      score: 0,
+      face: 1,
+      color,
+      cd: 0,
+      controls
+    };
+  }
+
+  const p1 = makePlayer(110, neon.cyan, {
+    left:"a", right:"d", up:"w", down:"s", shoot:"f"
+  });
+  const p2 = makePlayer(980-110, "#A78BFA", {
+    left:"arrowleft", right:"arrowright", up:"arrowup", down:"arrowdown", shoot:"/"
+  });
+
+  const bullets = [];
+  function shoot(p) {
+    if (p.cd > 0) return;
+    p.cd = 12;
+
+    const speed = 9.5;
+    const bx = p.x + p.face * (p.w/2 + 8);
+    const by = p.y - p.h*0.15;
+
+    bullets.push({
+      x: bx, y: by,
+      vx: p.face * speed,
+      vy: 0,
+      r: 3.2,
+      life: 90,
+      color: p.color,
+      owner: p
+    });
+  }
+
+  function resetRound(winner) {
+    p1.x = 110; p1.y = 0; p1.vx = p1.vy = 0; p1.hp = 100; p1.face = 1; p1.cd = 0;
+    p2.x = W()-110; p2.y = 0; p2.vx = p2.vy = 0; p2.hp = 100; p2.face = -1; p2.cd = 0;
+    bullets.length = 0;
+    if (winner) {
+      winner.score++;
+      document.getElementById("status").textContent =
+        `Point for ${winner===p1?"P1":"P2"} — Score ${p1.score}:${p2.score}`;
+    } else {
+      document.getElementById("status").textContent = `First to 5 wins.`;
+    }
+  }
+
+  resetRound();
+
+  function rectHitCircle(rx, ry, rw, rh, cx, cy, cr) {
+    const px = clamp(cx, rx, rx+rw);
+    const py = clamp(cy, ry, ry+rh);
+    const dx = cx - px, dy = cy - py;
+    return dx*dx + dy*dy <= cr*cr;
+  }
+
+  function updatePlayer(p) {
+    const acc = 0.65;
+    const maxV = 6.2;
+    const friction = 0.86;
+
+    const L = keys.has(p.controls.left);
+    const R = keys.has(p.controls.right);
+    const U = keys.has(p.controls.up);
+    const D = keys.has(p.controls.down);
+    const S = keys.has(p.controls.shoot);
+
+    if (L) p.vx -= acc;
+    if (R) p.vx += acc;
+    if (U) p.vy -= acc;
+    if (D) p.vy += acc;
+
+    p.vx *= friction;
+    p.vy *= friction;
+    p.vx = clamp(p.vx, -maxV, maxV);
+    p.vy = clamp(p.vy, -maxV, maxV);
+
+    p.x += p.vx;
+    p.y += p.vy;
+
+    p.x = clamp(p.x, 18, W()-18);
+    p.y = clamp(p.y, -10, H()-18);
+
+    p.face = (p===p1 ? (p2.x>p1.x?1:-1) : (p1.x>p2.x?1:-1));
+
+    if (p.cd > 0) p.cd--;
+    if (S) shoot(p);
+  }
+
+  function updateBullets() {
+    for (let i = bullets.length - 1; i >= 0; i--) {
+      const b = bullets[i];
+      b.x += b.vx;
+      b.y += b.vy;
+      b.life--;
+
+      if (b.life <= 0 || b.x < -40 || b.x > W()+40) {
+        bullets.splice(i, 1);
+        continue;
+      }
+
+      const target = (b.owner === p1) ? p2 : p1;
+      const rx = target.x - target.w/2;
+      const ry = target.y - target.h;
+
+      if (rectHitCircle(rx, ry, target.w, target.h, b.x, b.y, b.r + 2)) {
+        target.hp -= 12;
+        target.vx += Math.sign(b.vx) * 1.2;
+        bullets.splice(i, 1);
+
+        if (target.hp <= 0) {
+          const winner = (target === p1) ? p2 : p1;
+          if (winner.score >= 4) {
+            winner.score++;
+            document.getElementById("status").textContent =
+              `🏆 ${winner===p1?"P1":"P2"} WINS ${p1.score}:${p2.score} — Refresh to restart`;
+            running = false;
+          } else {
+            resetRound(winner);
+          }
+        }
+      }
+    }
+  }
+
+  function glowLine(x1,y1,x2,y2,color,w=2) {
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = w;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.moveTo(x1,y1);
+    ctx.lineTo(x2,y2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawPlayer(p, label) {
+    const x = p.x, y = p.y;
+    const bodyTop = y - p.h;
+
+    ctx.save();
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 18;
+    ctx.strokeStyle = p.color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(x, y+2, 18, 7, 0, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(x, bodyTop + 14);
+
+    ctx.save();
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 16;
+    ctx.fillStyle = "rgba(234,247,255,0.07)";
+    ctx.strokeStyle = p.color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, 10, 0, Math.PI*2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.fillStyle = "rgba(0,229,255,0.10)";
+    ctx.beginPath();
+    ctx.ellipse(2, 1, 6, 4, 0.2, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.strokeStyle = neon.white;
+    ctx.globalAlpha = 0.8;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, 10);
+    ctx.lineTo(0, 26);
+    ctx.stroke();
+    ctx.restore();
+
+    const armY = 16;
+    const gunX = p.face * 14;
+    glowLine(0, armY, gunX, armY, p.color, 2);
+
+    ctx.save();
+    ctx.strokeStyle = neon.white;
+    ctx.globalAlpha = 0.7;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, 26); ctx.lineTo(-7, 38);
+    ctx.moveTo(0, 26); ctx.lineTo(7, 38);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.fillStyle = neon.white;
+    ctx.globalAlpha = 0.85;
+    ctx.font = "12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(label, 0, -16);
+    ctx.restore();
+
+    ctx.restore();
+  }
+
+  function drawUI() {
+    const barW = 220, barH = 10;
+    function hpBar(x, y, hp, color) {
+      ctx.save();
+      ctx.fillStyle = "rgba(234,247,255,0.08)";
+      ctx.fillRect(x, y, barW, barH);
+      ctx.fillStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 14;
+      ctx.fillRect(x, y, barW * clamp(hp/100,0,1), barH);
+      ctx.restore();
+    }
+    hpBar(14, 14, p1.hp, p1.color);
+    hpBar(W()-14-barW, 14, p2.hp, p2.color);
+
+    ctx.save();
+    ctx.fillStyle = neon.white;
+    ctx.globalAlpha = 0.9;
+    ctx.font = "14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+    ctx.fillText(`P1 ${p1.score}`, 14, 46);
+    ctx.textAlign = "right";
+    ctx.fillText(`P2 ${p2.score}`, W()-14, 46);
+    ctx.restore();
+  }
+
+  function drawBackground(t) {
+    const g = ctx.createLinearGradient(0,0,0,H());
+    g.addColorStop(0, "#020617");
+    g.addColorStop(1, neon.deep);
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,W(),H());
+
+    for (const s of stars) {
+      s.x -= s.s;
+      if (s.x < -2) { s.x = W()+2; s.y = Math.random()*H(); }
+      ctx.save();
+      ctx.fillStyle = "rgba(234,247,255,0.7)";
+      ctx.globalAlpha = 0.25 + 0.25*Math.sin((t*0.002)+(s.y*0.01));
+      ctx.beginPath();
+      ctx.arc(s.x*(W()/980), s.y*(H()/420), s.r, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    glowLine(0, H()-18, W(), H()-18, neon.cyan, 2);
+  }
+
+  function drawBullets() {
+    for (const b of bullets) {
+      ctx.save();
+      ctx.fillStyle = b.color;
+      ctx.shadowColor = b.color;
+      ctx.shadowBlur = 18;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r, 0, Math.PI*2);
+      ctx.fill();
+      glowLine(b.x, b.y, b.x - b.vx*2, b.y, b.color, 2);
+      ctx.restore();
+    }
+  }
+
+  let running = true;
+  let last = performance.now();
+
+  function loop(now) {
+    last = now;
+
+    drawBackground(now);
+
+    if (running) {
+      updatePlayer(p1);
+      updatePlayer(p2);
+      updateBullets();
+    }
+
+    // Ground
+    p1.y = H()-18;
+    p2.y = H()-18;
+
+    drawBullets();
+    drawPlayer(p1, "P1");
+    drawPlayer(p2, "P2");
+    drawUI();
+
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
