@@ -672,51 +672,55 @@
     return dx*dx + dy*dy <= cr*cr;
   }
 
-  function updatePlayerHuman(p) {
-    const acc = 0.72;
-    const maxV = 6.6;
-    const friction = 0.86;
+function updatePlayerHuman(p) {
+  const acc = 0.72;
+  const maxV = 6.6;
+  const friction = 0.86;
 
-    const L = keys.has(p.controls.left);
-    const R = keys.has(p.controls.right);
-    const U = keys.has(p.controls.up);
-    const D = keys.has(p.controls.down);
-    const S = keys.has(p.controls.shoot);
-    const J = keys.has(p.controls.jump);
+  // ✅ ONLY: A/D move, Space jump, F shoot
+  const L = keys.has("a");
+  const R = keys.has("d");
+  const S = keys.has("f");
+  const J = keys.has(" ");
 
-    if (L) p.vx -= acc;
-    if (R) p.vx += acc;
-    if (U) p.vy -= 0.25;
-    if (D) p.vy += 0.25;
+  if (L) p.vx -= acc;
+  if (R) p.vx += acc;
 
-    if (p.jumpCd > 0) p.jumpCd--;
-    if (J && p.onGround && p.jumpCd === 0) {
-      p.jumpCd = 10;
-      jump(p);
-    }
-
-    p.vx *= friction;
-    p.vx = clamp(p.vx, -maxV, maxV);
-
-    if (!p.onGround) p.vy += 0.62;
-    p.vy = clamp(p.vy, -12, 12);
-
-    p.x += p.vx;
-    p.y += p.vy;
-
-    p.x = clamp(p.x, 18, W()-18);
-
-    if (p.y >= groundY()) {
-      p.y = groundY();
-      p.vy = 0;
-      p.onGround = true;
-    }
-
-    p.face = (bot.x > p.x ? 1 : -1);
-
-    if (p.cd > 0) p.cd--;
-    if (S) shoot(p);
+  // ✅ Jump (only from ground)
+  if (p.jumpCd > 0) p.jumpCd--;
+  if (J && p.onGround && p.jumpCd === 0) {
+    p.jumpCd = 10;
+    jump(p);
   }
+
+  // horizontal motion
+  p.vx *= friction;
+  p.vx = clamp(p.vx, -maxV, maxV);
+
+  // ✅ gravity (no flying)
+  if (!p.onGround) p.vy += 0.62;
+  p.vy = clamp(p.vy, -12, 12);
+
+  p.x += p.vx;
+  p.y += p.vy;
+
+  // walls
+  p.x = clamp(p.x, 18, W()-18);
+
+  // ground collision
+  if (p.y >= groundY()) {
+    p.y = groundY();
+    p.vy = 0;
+    p.onGround = true;
+  }
+
+  // face enemy
+  p.face = (bot.x > p.x ? 1 : -1);
+
+  // shoot
+  if (p.cd > 0) p.cd--;
+  if (S) shoot(p);
+}
 
   function nearestThreatTo(p) {
     let best = null;
