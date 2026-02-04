@@ -83,8 +83,5 @@ The game includes built-in music using **WebAudio** (no external files).
 - More weapons & power-ups
 - Smarter AI patterns
 
----
 
-### License
-MIT (optional — add a `LICENSE` file if you want)
 
