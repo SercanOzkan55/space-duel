@@ -118,6 +118,9 @@
     .resultTitle[data-type="lose"]{
       text-shadow: 0 0 18px rgba(255,61,129,.35);
     }
+    .resultTitle[data-type="draw"]{
+      text-shadow: 0 0 18px rgba(234,247,255,.25);
+    }
     .resultSub{
       opacity:.85;
       margin-bottom:14px;
@@ -273,7 +276,7 @@
 
       <div class="topbar">
         <div class="help">
-          <span class="kbd">WASD</span> Move
+          <span class="kbd">A / D</span> Move
           <span class="sep">|</span>
           <span class="kbd">Space</span> Jump
           <span class="sep">|</span>
@@ -317,7 +320,7 @@
         </div>
       </div>
 
-      <!-- WIN/LOSE OVERLAY -->
+      <!-- WIN/LOSE/DRAW OVERLAY -->
       <div id="overlay" class="overlay hidden">
         <div class="panel">
           <div id="resultTitle" class="resultTitle">YOU WIN</div>
@@ -338,7 +341,6 @@
         <button id="resetBoard" class="btn ghost">Reset leaderboard</button>
       </div>
       <div class="podiumRow">
-        <!-- Order visually: 2 - 1 - 3 -->
         <div class="podiumCard p2">
           <div class="rank">2</div>
           <div class="name" id="lb2n">—</div>
@@ -379,7 +381,7 @@
   const startMenu = document.getElementById("startMenu");
   const startBtn = document.getElementById("startBtn");
   const menuName = document.getElementById("menuName");
-  const diffBtns = Array.from(document.querySelectorAll('[data-diff]'));
+  const diffBtns = Array.from(document.querySelectorAll("[data-diff]"));
 
   const musicBtn = document.getElementById("musicBtn");
   const startMusicBtn = document.getElementById("startMusicBtn");
@@ -485,6 +487,9 @@
   let musicOn = true;
   let musicNodes = null;
 
+  // ✅ must be declared BEFORE usage anywhere
+  let roundOver = false;
+
   function ensureAudio() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   }
@@ -496,47 +501,138 @@
       musicNodes = null;
     }
   }
+
+  // nicer synthwave-ish loop
   function startMusic() {
     ensureAudio();
     if (audioCtx.state === "suspended") audioCtx.resume();
     stopMusic();
 
     const master = audioCtx.createGain();
-    master.gain.value = 0.03;
+    master.gain.value = 0.18;
 
-    const filter = audioCtx.createBiquadFilter();
-    filter.type = "lowpass";
-    filter.frequency.value = 900;
+    const comp = audioCtx.createDynamicsCompressor();
+    comp.threshold.value = -18;
+    comp.knee.value = 18;
+    comp.ratio.value = 4;
+    comp.attack.value = 0.01;
+    comp.release.value = 0.18;
 
-    const osc1 = audioCtx.createOscillator();
-    osc1.type = "sawtooth";
-    osc1.frequency.value = 110;
+    const delay = audioCtx.createDelay(0.6);
+    delay.delayTime.value = 0.22;
 
-    const osc2 = audioCtx.createOscillator();
-    osc2.type = "triangle";
-    osc2.frequency.value = 220;
+    const fb = audioCtx.createGain();
+    fb.gain.value = 0.35;
 
-    const lfo = audioCtx.createOscillator();
-    lfo.type = "sine";
-    lfo.frequency.value = 0.12;
+    const hp = audioCtx.createBiquadFilter();
+    hp.type = "highpass";
+    hp.frequency.value = 180;
 
-    const lfoGain = audioCtx.createGain();
-    lfoGain.gain.value = 140;
+    delay.connect(fb);
+    fb.connect(hp);
+    hp.connect(delay);
 
-    lfo.connect(lfoGain);
-    lfoGain.connect(filter.frequency);
+    const lp = audioCtx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = 2400;
 
-    osc1.connect(filter);
-    osc2.connect(filter);
-    filter.connect(master);
-    master.connect(audioCtx.destination);
+    master.connect(comp);
+    comp.connect(lp);
+    lp.connect(audioCtx.destination);
 
-    osc1.start();
-    osc2.start();
-    lfo.start();
+    const delaySend = audioCtx.createGain();
+    delaySend.gain.value = 0.32;
+    comp.connect(delaySend);
+    delaySend.connect(delay);
+    delay.connect(audioCtx.destination);
 
-    musicNodes = { osc1, osc2, lfo, master, filter };
+    const arp = audioCtx.createOscillator();
+    arp.type = "square";
+    const arpGain = audioCtx.createGain();
+    arpGain.gain.value = 0.0;
+
+    const arpFilter = audioCtx.createBiquadFilter();
+    arpFilter.type = "bandpass";
+    arpFilter.frequency.value = 900;
+    arpFilter.Q.value = 6;
+
+    arp.connect(arpFilter);
+    arpFilter.connect(arpGain);
+    arpGain.connect(master);
+
+    const bass = audioCtx.createOscillator();
+    bass.type = "sine";
+    const bassGain = audioCtx.createGain();
+    bassGain.gain.value = 0.0;
+    bass.connect(bassGain);
+    bassGain.connect(master);
+
+    const kickGain = audioCtx.createGain();
+    kickGain.gain.value = 0.0;
+    kickGain.connect(master);
+
+    const bpm = 112;
+    const step = 60 / bpm / 4; // 16th
+    let t = audioCtx.currentTime + 0.03;
+
+    const seq = [
+      0, 7, 10, 7,   0, 7, 12, 7,
+      3, 7, 10, 7,   5, 7, 12, 7
+    ];
+    const baseHz = 220;
+    let idx = 0;
+
+    function pluck(g, time, amp) {
+      g.cancelScheduledValues(time);
+      g.setValueAtTime(0.0001, time);
+      g.exponentialRampToValueAtTime(amp, time + 0.01);
+      g.exponentialRampToValueAtTime(0.0001, time + 0.12);
+    }
+
+    function kick(time) {
+      const o = audioCtx.createOscillator();
+      o.type = "sine";
+      const g = audioCtx.createGain();
+      o.connect(g);
+      g.connect(kickGain);
+
+      o.frequency.setValueAtTime(140, time);
+      o.frequency.exponentialRampToValueAtTime(45, time + 0.12);
+
+      g.gain.setValueAtTime(0.0001, time);
+      g.gain.exponentialRampToValueAtTime(0.9, time + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001, time + 0.18);
+
+      o.start(time);
+      o.stop(time + 0.2);
+    }
+
+    const stepsTotal = 16 * 4;
+    for (let s = 0; s < stepsTotal; s++) {
+      const semis = seq[idx % seq.length];
+      const hz = baseHz * Math.pow(2, semis / 12);
+
+      arp.frequency.setValueAtTime(hz, t);
+      pluck(arpGain.gain, t, 0.11);
+
+      if (s % 4 === 0) {
+        const bassHz = baseHz * Math.pow(2, (semis - 24) / 12);
+        bass.frequency.setValueAtTime(bassHz, t);
+        pluck(bassGain.gain, t, 0.08);
+      }
+
+      if (s % 8 === 0) kick(t);
+
+      t += step;
+      idx++;
+    }
+
+    arp.start();
+    bass.start();
+
+    musicNodes = { osc1: arp, osc2: bass, lfo: { stop(){} }, master };
   }
+
   function setMusic(on) {
     musicOn = on;
     musicBtn.textContent = `Music: ${musicOn ? "ON" : "OFF"}`;
@@ -592,7 +688,7 @@
   }
 
   const p1 = makePlayer(110, neon.cyan, {
-    left:"a", right:"d", up:"w", down:"s", shoot:"f", jump:" "
+    left:"a", right:"d", shoot:"f", jump:" "
   }, false);
 
   const bot = makePlayer(980-110, neon.purple, null, true);
@@ -629,19 +725,27 @@
   function hideOverlay() { overlay.classList.add("hidden"); }
   function showOverlay(type) {
     overlay.classList.remove("hidden");
+
     if (type === "win") {
       resultTitle.textContent = "YOU WIN";
       resultTitle.dataset.type = "win";
-    } else {
+    } else if (type === "lose") {
       resultTitle.textContent = "YOU LOSE";
       resultTitle.dataset.type = "lose";
+    } else {
+      resultTitle.textContent = "DRAW";
+      resultTitle.dataset.type = "draw";
     }
+
     resultSub.textContent = `Final Score ${p1.score}:${bot.score} • ${difficulty.toUpperCase()}`;
   }
 
   function resetRound(winner) {
+    roundOver = false;
+
     p1.x = 110; p1.y = groundY(); p1.vx = p1.vy = 0; p1.hp = 100; p1.face = 1; p1.cd = 0; p1.onGround = true;
     bot.x = W()-110; bot.y = groundY(); bot.vx = bot.vy = 0; bot.hp = 100; bot.face = -1; bot.cd = 0; bot.onGround = true;
+
     bullets.length = 0;
 
     if (winner) {
@@ -659,10 +763,7 @@
     resetRound(null);
   }
 
-  restartBtn.addEventListener("click", () => {
-    running = true;
-    resetMatch();
-  });
+  restartBtn.addEventListener("click", resetMatch);
   closeBtn.addEventListener("click", hideOverlay);
 
   function rectHitCircle(rx, ry, rw, rh, cx, cy, cr) {
@@ -672,55 +773,48 @@
     return dx*dx + dy*dy <= cr*cr;
   }
 
-function updatePlayerHuman(p) {
-  const acc = 0.72;
-  const maxV = 6.6;
-  const friction = 0.86;
+  function updatePlayerHuman(p) {
+    const acc = 0.72;
+    const maxV = 6.6;
+    const friction = 0.86;
 
-  // ✅ ONLY: A/D move, Space jump, F shoot
-  const L = keys.has("a");
-  const R = keys.has("d");
-  const S = keys.has("f");
-  const J = keys.has(" ");
+    // ONLY: A/D move, Space jump, F shoot
+    const L = keys.has("a");
+    const R = keys.has("d");
+    const S = keys.has("f");
+    const J = keys.has(" ");
 
-  if (L) p.vx -= acc;
-  if (R) p.vx += acc;
+    if (L) p.vx -= acc;
+    if (R) p.vx += acc;
 
-  // ✅ Jump (only from ground)
-  if (p.jumpCd > 0) p.jumpCd--;
-  if (J && p.onGround && p.jumpCd === 0) {
-    p.jumpCd = 10;
-    jump(p);
+    if (p.jumpCd > 0) p.jumpCd--;
+    if (J && p.onGround && p.jumpCd === 0) {
+      p.jumpCd = 10;
+      jump(p);
+    }
+
+    p.vx *= friction;
+    p.vx = clamp(p.vx, -maxV, maxV);
+
+    if (!p.onGround) p.vy += 0.62;
+    p.vy = clamp(p.vy, -12, 12);
+
+    p.x += p.vx;
+    p.y += p.vy;
+
+    p.x = clamp(p.x, 18, W()-18);
+
+    if (p.y >= groundY()) {
+      p.y = groundY();
+      p.vy = 0;
+      p.onGround = true;
+    }
+
+    p.face = (bot.x > p.x ? 1 : -1);
+
+    if (p.cd > 0) p.cd--;
+    if (S) shoot(p);
   }
-
-  // horizontal motion
-  p.vx *= friction;
-  p.vx = clamp(p.vx, -maxV, maxV);
-
-  // ✅ gravity (no flying)
-  if (!p.onGround) p.vy += 0.62;
-  p.vy = clamp(p.vy, -12, 12);
-
-  p.x += p.vx;
-  p.y += p.vy;
-
-  // walls
-  p.x = clamp(p.x, 18, W()-18);
-
-  // ground collision
-  if (p.y >= groundY()) {
-    p.y = groundY();
-    p.vy = 0;
-    p.onGround = true;
-  }
-
-  // face enemy
-  p.face = (bot.x > p.x ? 1 : -1);
-
-  // shoot
-  if (p.cd > 0) p.cd--;
-  if (S) shoot(p);
-}
 
   function nearestThreatTo(p) {
     let best = null;
@@ -799,28 +893,28 @@ function updatePlayerHuman(p) {
   }
 
   function calcPointsIfPlayerWins() {
-    // daha iyi skor = daha az AI puanı yedir + daha çok canla bitir + daha zor difficulty
     const diffBonus = DIFF[difficulty].bonus;
-    const margin = (5 - bot.score);          // 5:0 en iyi
-    const hpBonus = Math.max(0, Math.round(p1.hp)); // final round HP
-    const points = diffBonus + margin * 120 + hpBonus;
-    return points;
+    const margin = (5 - bot.score);
+    const hpBonus = Math.max(0, Math.round(p1.hp));
+    return diffBonus + margin * 120 + hpBonus;
   }
 
   function updateBullets() {
+    if (roundOver) return;
+
     for (let i = bullets.length - 1; i >= 0; i--) {
       const b = bullets[i];
       b.x += b.vx;
       b.y += b.vy;
       b.life--;
 
-      if (b.life <= 0 || b.x < -60 || b.x > W()+60) {
+      if (b.life <= 0 || b.x < -60 || b.x > W() + 60) {
         bullets.splice(i, 1);
         continue;
       }
 
       const target = (b.owner === p1) ? bot : p1;
-      const rx = target.x - target.w/2;
+      const rx = target.x - target.w / 2;
       const ry = target.y - target.h;
 
       if (rectHitCircle(rx, ry, target.w, target.h, b.x, b.y, b.r + 2)) {
@@ -828,11 +922,23 @@ function updatePlayerHuman(p) {
         target.vx += Math.sign(b.vx) * 1.25;
         bullets.splice(i, 1);
 
+        // DRAW check
+        const pDead = (p1.hp <= 0);
+        const bDead = (bot.hp <= 0);
+        if (pDead && bDead) {
+          roundOver = true;
+          running = false;
+          statusEl.textContent = `Match over — DRAW (${p1.score}:${bot.score})`;
+          showOverlay("draw");
+          return;
+        }
+
         if (target.hp <= 0) {
           const winner = (target === p1) ? bot : p1;
 
           if (winner.score >= 4) {
             winner.score++;
+            roundOver = true;
             running = false;
 
             statusEl.textContent = `Match over — Final ${p1.score}:${bot.score}`;
@@ -840,11 +946,11 @@ function updatePlayerHuman(p) {
             const playerWon = (winner === p1);
             showOverlay(playerWon ? "win" : "lose");
 
-            // ✅ Save leaderboard only if player wins
             if (playerWon) {
               const pts = calcPointsIfPlayerWins();
               submitScore(playerName, pts, difficulty, `${p1.score}:${bot.score}`);
-              statusEl.textContent = `Saved score: ${pts} pts — Final ${p1.score}:${bot.score} (${difficulty.toUpperCase()})`;
+              statusEl.textContent =
+                `Saved score: ${pts} pts — Final ${p1.score}:${bot.score} (${difficulty.toUpperCase()})`;
             }
           } else {
             resetRound(winner);
