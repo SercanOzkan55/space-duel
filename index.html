@@ -4,7 +4,267 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Neon Space Duel — AI</title>
-  <link rel="stylesheet" href="style.css" />
+  <style>
+    :root{
+      --bg:#020617;
+      --text:#eaf7ff;
+      --cyan:#00E5FF;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      background:
+        radial-gradient(1200px 400px at 50% 10%, rgba(0,229,255,.12), transparent 60%),
+        radial-gradient(900px 380px at 10% 20%, rgba(124,58,237,.10), transparent 60%),
+        var(--bg);
+      color:var(--text);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+    .wrap{max-width:980px;margin:0 auto;padding:16px}
+    header{padding:8px 2px 10px}
+    h1{
+      margin:0;
+      letter-spacing: 0.18em;
+      font-size: 22px;
+      color: var(--text);
+      text-shadow: 0 0 18px rgba(0,229,255,.45);
+    }
+    .kbd{
+      display:inline-block;
+      padding:2px 8px;
+      border:1px solid rgba(234,247,255,.25);
+      border-radius:999px;
+      margin-right:6px;
+      font-size:12px;
+    }
+    .sep{opacity:.5;margin:0 10px}
+    canvas{
+      display:block;
+      width:100%;
+      border-radius: 18px;
+      border: 1px solid rgba(234,247,255,.12);
+      box-shadow: 0 0 30px rgba(0,229,255,.12), inset 0 0 30px rgba(0,229,255,.06);
+      background: rgba(2,6,23,.35);
+    }
+    footer{padding:10px 2px;opacity:.85}
+
+    .topbar{
+      display:flex;
+      gap:12px;
+      align-items:center;
+      justify-content:space-between;
+      margin-top:10px;
+      flex-wrap:wrap;
+    }
+    .help{opacity:.9}
+
+    .btn{
+      cursor:pointer;
+      border:1px solid rgba(234,247,255,.18);
+      background: rgba(0,229,255,.10);
+      color: var(--text);
+      border-radius:999px;
+      padding:6px 12px;
+      font: inherit;
+      font-size:12px;
+      transition: transform .06s ease, box-shadow .2s ease, background .2s ease;
+      box-shadow: 0 0 18px rgba(0,229,255,.10);
+      user-select:none;
+    }
+    .btn:hover{
+      background: rgba(0,229,255,.16);
+      box-shadow: 0 0 24px rgba(0,229,255,.16);
+    }
+    .btn:active{ transform: translateY(1px); }
+    .btn.ghost{
+      background: rgba(234,247,255,.06);
+      box-shadow:none;
+    }
+    .btn.big{
+      padding:10px 16px;
+      font-size:13px;
+    }
+
+    .stage{position:relative}
+
+    .overlay{
+      position:absolute;
+      inset:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      backdrop-filter: blur(6px);
+      background: rgba(2,6,23,.45);
+      border-radius:18px;
+      z-index:5;
+    }
+    .hidden{ display:none !important; }
+
+    .panel{
+      width:min(560px, 92%);
+      border-radius:18px;
+      border:1px solid rgba(234,247,255,.14);
+      background: rgba(2,6,23,.70);
+      box-shadow: 0 0 40px rgba(0,229,255,.18), inset 0 0 30px rgba(0,229,255,.06);
+      padding:18px 16px 14px;
+      text-align:center;
+    }
+    .resultTitle{
+      letter-spacing:.18em;
+      font-size:22px;
+      margin-bottom:6px;
+      text-shadow: 0 0 18px rgba(0,229,255,.45);
+    }
+    .resultTitle[data-type="lose"]{
+      text-shadow: 0 0 18px rgba(255,61,129,.35);
+    }
+    .resultSub{
+      opacity:.85;
+      margin-bottom:14px;
+    }
+    .panelBtns{
+      display:flex;
+      gap:10px;
+      justify-content:center;
+      flex-wrap:wrap;
+      margin-top:10px;
+    }
+    .tinyHint{
+      margin-top:12px;
+      opacity:.6;
+      font-size:12px;
+    }
+
+    .menuRow{
+      display:flex;
+      gap:10px;
+      justify-content:center;
+      align-items:center;
+      margin:14px 0 8px;
+      flex-wrap:wrap;
+    }
+    .menuRow input{
+      width:240px;
+      max-width:78vw;
+      outline:none;
+      border:1px solid rgba(234,247,255,.14);
+      background: rgba(2,6,23,.35);
+      color: var(--text);
+      border-radius:999px;
+      padding:10px 12px;
+      font: inherit;
+      font-size:13px;
+    }
+    .menuRow input::placeholder{opacity:.55}
+
+    .pillGroup{
+      display:flex;
+      gap:8px;
+      justify-content:center;
+      flex-wrap:wrap;
+      margin-top:6px;
+    }
+    .pill{
+      padding:6px 12px;
+      border-radius:999px;
+      border:1px solid rgba(234,247,255,.18);
+      background: rgba(234,247,255,.06);
+      opacity:.9;
+    }
+    .pill.active{
+      background: rgba(0,229,255,.14);
+      box-shadow: 0 0 18px rgba(0,229,255,.14);
+      border-color: rgba(0,229,255,.32);
+    }
+
+    .pressEnter{
+      margin-top:10px;
+      letter-spacing:.18em;
+      opacity:.85;
+      font-size:12px;
+      text-shadow: 0 0 18px rgba(0,229,255,.25);
+      animation: blink 1.1s ease-in-out infinite;
+    }
+    @keyframes blink{
+      0%,100%{opacity:.25}
+      50%{opacity:.95}
+    }
+
+    .toggleRow{
+      display:flex;
+      justify-content:center;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:10px;
+    }
+
+    /* --- Podium (Top 3) --- */
+    .podium{
+      margin-top:14px;
+      padding:12px 12px 10px;
+      border:1px solid rgba(234,247,255,.12);
+      border-radius:18px;
+      background: rgba(2,6,23,.25);
+      box-shadow: inset 0 0 22px rgba(0,229,255,.05);
+    }
+    .podiumTitle{
+      letter-spacing:.18em;
+      font-size:12px;
+      opacity:.85;
+      margin-bottom:10px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .podiumRow{
+      display:flex;
+      justify-content:center;
+      gap:10px;
+      align-items:flex-end;
+      flex-wrap:wrap;
+    }
+    .podiumCard{
+      width: min(240px, 28vw);
+      min-width: 170px;
+      padding:10px 10px 12px;
+      border-radius:16px;
+      border:1px solid rgba(234,247,255,.12);
+      background: rgba(2,6,23,.35);
+      text-align:center;
+    }
+    .podiumCard .rank{
+      font-size:12px;
+      opacity:.8;
+      margin-bottom:6px;
+    }
+    .podiumCard .name{
+      font-size:14px;
+      letter-spacing:.06em;
+      margin-bottom:4px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .podiumCard .score{
+      font-size:12px;
+      opacity:.75;
+    }
+    .podiumCard.p1{
+      transform: translateY(-14px);
+      box-shadow: 0 0 26px rgba(0,229,255,.14);
+      border-color: rgba(0,229,255,.22);
+    }
+    .podiumCard.p2{
+      transform: translateY(-6px);
+      box-shadow: 0 0 18px rgba(167,139,250,.10);
+    }
+    .podiumCard.p3{
+      transform: translateY(-2px);
+      box-shadow: 0 0 14px rgba(234,247,255,.08);
+    }
+  </style>
 </head>
 <body>
   <div class="wrap">
@@ -20,10 +280,10 @@
           <span class="kbd">F</span> Shoot
         </div>
 
-        <div class="namebox">
-          <label for="pname">Name</label>
-          <input id="pname" maxlength="12" placeholder="Sercan?" />
-          <button id="applyName" class="btn">Apply</button>
+        <div class="help">
+          <button id="musicBtn" class="btn">Music: ON</button>
+          <span class="sep">|</span>
+          <span class="kbd">Enter</span> Start
         </div>
       </div>
     </header>
@@ -31,7 +291,33 @@
     <div class="stage">
       <canvas id="c" width="980" height="420"></canvas>
 
-      <!-- Win/Lose Overlay -->
+      <!-- START MENU -->
+      <div id="startMenu" class="overlay">
+        <div class="panel">
+          <div class="resultTitle">NEON SPACE DUEL</div>
+          <div class="resultSub">Enter your name • choose difficulty • press Start</div>
+
+          <div class="menuRow">
+            <input id="menuName" maxlength="12" placeholder="Your name..." />
+            <button id="startBtn" class="btn big">START</button>
+          </div>
+
+          <div class="pillGroup" aria-label="Difficulty">
+            <button class="btn pill active" data-diff="easy">Easy</button>
+            <button class="btn pill" data-diff="normal">Normal</button>
+            <button class="btn pill" data-diff="hard">Hard</button>
+          </div>
+
+          <div class="toggleRow">
+            <button id="startMusicBtn" class="btn">Music: ON</button>
+          </div>
+
+          <div class="pressEnter">PRESS ENTER</div>
+          <div class="tinyHint">Tip: Jump dodges bullets. AI gets tougher on Hard 👀</div>
+        </div>
+      </div>
+
+      <!-- WIN/LOSE OVERLAY -->
       <div id="overlay" class="overlay hidden">
         <div class="panel">
           <div id="resultTitle" class="resultTitle">YOU WIN</div>
@@ -40,7 +326,35 @@
             <button id="restartBtn" class="btn big">Restart</button>
             <button id="closeBtn" class="btn ghost">Close</button>
           </div>
-          <div class="tinyHint">Tip: Jump dodges bullets. AI learns your rhythm 👀</div>
+          <div class="tinyHint">Win on Hard for bigger points ✨</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PODIUM -->
+    <div class="podium">
+      <div class="podiumTitle">
+        <span>TOP 3 (local)</span>
+        <button id="resetBoard" class="btn ghost">Reset leaderboard</button>
+      </div>
+      <div class="podiumRow">
+        <!-- Order visually: 2 - 1 - 3 -->
+        <div class="podiumCard p2">
+          <div class="rank">2</div>
+          <div class="name" id="lb2n">—</div>
+          <div class="score" id="lb2s">—</div>
+        </div>
+
+        <div class="podiumCard p1">
+          <div class="rank">1</div>
+          <div class="name" id="lb1n">—</div>
+          <div class="score" id="lb1s">—</div>
+        </div>
+
+        <div class="podiumCard p3">
+          <div class="rank">3</div>
+          <div class="name" id="lb3n">—</div>
+          <div class="score" id="lb3s">—</div>
         </div>
       </div>
     </div>
@@ -62,8 +376,13 @@
   const restartBtn = document.getElementById("restartBtn");
   const closeBtn = document.getElementById("closeBtn");
 
-  const nameInput = document.getElementById("pname");
-  const applyName = document.getElementById("applyName");
+  const startMenu = document.getElementById("startMenu");
+  const startBtn = document.getElementById("startBtn");
+  const menuName = document.getElementById("menuName");
+  const diffBtns = Array.from(document.querySelectorAll('[data-diff]'));
+
+  const musicBtn = document.getElementById("musicBtn");
+  const startMusicBtn = document.getElementById("startMusicBtn");
 
   // HiDPI
   const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
@@ -91,7 +410,7 @@
   });
   window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
 
-  // Stars (use base coords then scale in draw)
+  // Stars
   const stars = Array.from({length: 140}, () => ({
     x: Math.random() * 980,
     y: Math.random() * 420,
@@ -104,12 +423,141 @@
     deep: "#06121f",
     white: "#eaf7ff",
     purple: "#A78BFA",
-    red: "#FF3D81",
-    green: "#33FFB1"
+    red: "#FF3D81"
   };
 
   const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
-  const lerp = (a,b,t)=>a+(b-a)*t;
+
+  // --- Leaderboard (localStorage) ---
+  const LB_KEY = "nsd_leaderboard_v1";
+
+  function loadLB(){
+    try { return JSON.parse(localStorage.getItem(LB_KEY) || "[]"); }
+    catch { return []; }
+  }
+  function saveLB(list){
+    localStorage.setItem(LB_KEY, JSON.stringify(list));
+  }
+  function updatePodiumUI(){
+    const lb = loadLB().sort((a,b)=>b.points-a.points).slice(0,3);
+
+    const e1n = document.getElementById("lb1n");
+    const e1s = document.getElementById("lb1s");
+    const e2n = document.getElementById("lb2n");
+    const e2s = document.getElementById("lb2s");
+    const e3n = document.getElementById("lb3n");
+    const e3s = document.getElementById("lb3s");
+
+    const a1 = lb[0], a2 = lb[1], a3 = lb[2];
+
+    e1n.textContent = a1 ? a1.name : "—";
+    e1s.textContent = a1 ? `${a1.points} pts • ${a1.diff.toUpperCase()}` : "—";
+
+    e2n.textContent = a2 ? a2.name : "—";
+    e2s.textContent = a2 ? `${a2.points} pts • ${a2.diff.toUpperCase()}` : "—";
+
+    e3n.textContent = a3 ? a3.name : "—";
+    e3s.textContent = a3 ? `${a3.points} pts • ${a3.diff.toUpperCase()}` : "—";
+  }
+  function submitScore(name, points, diff, finalScore){
+    const safeName = (name || "P1").trim().slice(0,20) || "P1";
+    const lb = loadLB();
+
+    lb.push({ name: safeName, points, diff, final: finalScore, t: Date.now() });
+
+    // keep best per name only
+    const best = new Map();
+    for (const e of lb){
+      const prev = best.get(e.name);
+      if (!prev || e.points > prev.points) best.set(e.name, e);
+    }
+    saveLB(Array.from(best.values()));
+    updatePodiumUI();
+  }
+
+  document.getElementById("resetBoard").addEventListener("click", ()=>{
+    localStorage.removeItem(LB_KEY);
+    updatePodiumUI();
+  });
+
+  // ---- Music (WebAudio - no external files) ----
+  let audioCtx = null;
+  let musicOn = true;
+  let musicNodes = null;
+
+  function ensureAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  function stopMusic() {
+    if (musicNodes) {
+      try { musicNodes.osc1.stop(); } catch {}
+      try { musicNodes.osc2.stop(); } catch {}
+      try { musicNodes.lfo.stop(); } catch {}
+      musicNodes = null;
+    }
+  }
+  function startMusic() {
+    ensureAudio();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    stopMusic();
+
+    const master = audioCtx.createGain();
+    master.gain.value = 0.03;
+
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = 900;
+
+    const osc1 = audioCtx.createOscillator();
+    osc1.type = "sawtooth";
+    osc1.frequency.value = 110;
+
+    const osc2 = audioCtx.createOscillator();
+    osc2.type = "triangle";
+    osc2.frequency.value = 220;
+
+    const lfo = audioCtx.createOscillator();
+    lfo.type = "sine";
+    lfo.frequency.value = 0.12;
+
+    const lfoGain = audioCtx.createGain();
+    lfoGain.gain.value = 140;
+
+    lfo.connect(lfoGain);
+    lfoGain.connect(filter.frequency);
+
+    osc1.connect(filter);
+    osc2.connect(filter);
+    filter.connect(master);
+    master.connect(audioCtx.destination);
+
+    osc1.start();
+    osc2.start();
+    lfo.start();
+
+    musicNodes = { osc1, osc2, lfo, master, filter };
+  }
+  function setMusic(on) {
+    musicOn = on;
+    musicBtn.textContent = `Music: ${musicOn ? "ON" : "OFF"}`;
+    startMusicBtn.textContent = `Music: ${musicOn ? "ON" : "OFF"}`;
+    if (musicOn) startMusic(); else stopMusic();
+  }
+  musicBtn.addEventListener("click", () => setMusic(!musicOn));
+  startMusicBtn.addEventListener("click", () => setMusic(!musicOn));
+
+  // ---- Difficulty ----
+  let difficulty = "easy";
+  const DIFF = {
+    easy:   { aiAgg: 0.45, aiDodge: 0.65, aiStrafe: 0.45, aiMaxV: 5.6, bonus: 0 },
+    normal: { aiAgg: 0.65, aiDodge: 0.85, aiStrafe: 0.55, aiMaxV: 6.1, bonus: 200 },
+    hard:   { aiAgg: 0.85, aiDodge: 0.95, aiStrafe: 0.70, aiMaxV: 6.5, bonus: 450 }
+  };
+  function setDifficulty(d) {
+    difficulty = d;
+    diffBtns.forEach(b => b.classList.toggle("active", b.dataset.diff === d));
+  }
+  diffBtns.forEach(b => b.addEventListener("click", () => setDifficulty(b.dataset.diff)));
 
   // Physics
   const groundY = () => H() - 18;
@@ -126,44 +574,31 @@
       face: 1,
       color,
 
-      cd: 0,          // shoot cooldown frames
-      jumpCd: 0,      // jump buffer
+      cd: 0,
+      jumpCd: 0,
       onGround: true,
 
       label: isAI ? "AI" : "P1",
       controls,
       isAI,
 
-      // AI memory / tuning
       ai: {
         jitter: 0,
-        aimBias: (Math.random()*2-1) * 10,
-        aggression: 0.65,     // shoot tendency
-        dodge: 0.85,          // dodge tendency
-        strafe: 0.55          // move left-right tendency
+        aggression: 0.65,
+        dodge: 0.85,
+        strafe: 0.55
       }
     };
   }
 
-  // Player1
   const p1 = makePlayer(110, neon.cyan, {
     left:"a", right:"d", up:"w", down:"s", shoot:"f", jump:" "
   }, false);
 
-  // Enemy AI (replaces Player2)
   const bot = makePlayer(980-110, neon.purple, null, true);
   bot.face = -1;
 
   let playerName = "P1";
-  applyName.addEventListener("click", () => {
-    const v = (nameInput.value || "").trim();
-    playerName = v.length ? v.slice(0,12) : "P1";
-    p1.label = playerName;
-    statusEl.textContent = `Name set: ${playerName}. First to 5 wins.`;
-  });
-  nameInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") applyName.click();
-  });
 
   const bullets = [];
   function shoot(p) {
@@ -188,7 +623,20 @@
   function jump(p) {
     if (!p.onGround) return;
     p.onGround = false;
-    p.vy = -11.2; // jump impulse
+    p.vy = -11.2;
+  }
+
+  function hideOverlay() { overlay.classList.add("hidden"); }
+  function showOverlay(type) {
+    overlay.classList.remove("hidden");
+    if (type === "win") {
+      resultTitle.textContent = "YOU WIN";
+      resultTitle.dataset.type = "win";
+    } else {
+      resultTitle.textContent = "YOU LOSE";
+      resultTitle.dataset.type = "lose";
+    }
+    resultSub.textContent = `Final Score ${p1.score}:${bot.score} • ${difficulty.toUpperCase()}`;
   }
 
   function resetRound(winner) {
@@ -211,26 +659,11 @@
     resetRound(null);
   }
 
-  restartBtn.addEventListener("click", resetMatch);
+  restartBtn.addEventListener("click", () => {
+    running = true;
+    resetMatch();
+  });
   closeBtn.addEventListener("click", hideOverlay);
-
-  function showOverlay(type) {
-    // type: "win" | "lose"
-    overlay.classList.remove("hidden");
-    if (type === "win") {
-      resultTitle.textContent = "YOU WIN";
-      resultTitle.dataset.type = "win";
-    } else {
-      resultTitle.textContent = "YOU LOSE";
-      resultTitle.dataset.type = "lose";
-    }
-    resultSub.textContent = `Final Score ${p1.score}:${bot.score}`;
-  }
-  function hideOverlay() {
-    overlay.classList.add("hidden");
-  }
-
-  resetRound();
 
   function rectHitCircle(rx, ry, rw, rh, cx, cy, cr) {
     const px = clamp(cx, rx, rx+rw);
@@ -253,10 +686,9 @@
 
     if (L) p.vx -= acc;
     if (R) p.vx += acc;
-    if (U) p.vy -= 0.25; // tiny "float" feel (optional)
+    if (U) p.vy -= 0.25;
     if (D) p.vy += 0.25;
 
-    // Jump buffer
     if (p.jumpCd > 0) p.jumpCd--;
     if (J && p.onGround && p.jumpCd === 0) {
       p.jumpCd = 10;
@@ -266,7 +698,6 @@
     p.vx *= friction;
     p.vx = clamp(p.vx, -maxV, maxV);
 
-    // gravity
     if (!p.onGround) p.vy += 0.62;
     p.vy = clamp(p.vy, -12, 12);
 
@@ -275,14 +706,12 @@
 
     p.x = clamp(p.x, 18, W()-18);
 
-    // ground collision
     if (p.y >= groundY()) {
       p.y = groundY();
       p.vy = 0;
       p.onGround = true;
     }
 
-    // face enemy
     p.face = (bot.x > p.x ? 1 : -1);
 
     if (p.cd > 0) p.cd--;
@@ -290,7 +719,6 @@
   }
 
   function nearestThreatTo(p) {
-    // find nearest enemy bullet heading towards p
     let best = null;
     let bestT = 1e9;
     for (const b of bullets) {
@@ -298,63 +726,51 @@
       const toward = Math.sign(b.vx) === Math.sign(p.x - b.x);
       if (!toward) continue;
       const dx = Math.abs(b.x - p.x);
-      if (dx < bestT) {
-        bestT = dx;
-        best = b;
-      }
+      if (dx < bestT) { bestT = dx; best = b; }
     }
     return best;
   }
 
   function updateBotAI(p) {
-    // Lightweight behavior:
-    // - keep distance
-    // - strafe
-    // - dodge bullets by jumping or moving
-    // - shoot when aligned
-
     const target = p1;
+
+    const cfg = DIFF[difficulty];
+    p.ai.aggression = cfg.aiAgg;
+    p.ai.dodge = cfg.aiDodge;
+    p.ai.strafe = cfg.aiStrafe;
+
     const acc = 0.62;
-    const maxV = 6.1;
+    const maxV = cfg.aiMaxV;
     const friction = 0.88;
 
     const dist = target.x - p.x;
-
-    // Face target
     p.face = (target.x > p.x ? 1 : -1);
 
-    // Basic spacing: try to keep ~280px
     const desired = 280;
     const tooClose = Math.abs(dist) < desired * 0.75;
     const tooFar   = Math.abs(dist) > desired * 1.25;
 
-    // Threat detection
     const threat = nearestThreatTo(p);
     const threatNear = threat && Math.abs(threat.x - p.x) < 140 && Math.abs(threat.y - p.y) < 70;
 
-    // Movement intent
-    let move = 0; // -1 left, +1 right
-    if (tooClose) move = -Math.sign(dist);    // back off
-    else if (tooFar) move = Math.sign(dist);  // chase
+    let move = 0;
+    if (tooClose) move = -Math.sign(dist);
+    else if (tooFar) move = Math.sign(dist);
     else {
-      // strafe
       p.ai.jitter += (Math.random() - 0.5) * 0.25;
       p.ai.jitter = clamp(p.ai.jitter, -1, 1);
       if (Math.random() < p.ai.strafe) move = Math.sign(p.ai.jitter);
     }
 
-    // Dodge: if bullet approaching, step aside / jump
     if (threatNear && Math.random() < p.ai.dodge) {
-      move = Math.sign((p.x - threat.x) || 1); // move away from bullet x
-      if (p.onGround && Math.random() < 0.55) jump(p);
+      move = Math.sign((p.x - threat.x) || 1);
+      if (p.onGround && Math.random() < 0.58) jump(p);
     }
 
-    // Apply movement
     p.vx += move * acc;
     p.vx *= friction;
     p.vx = clamp(p.vx, -maxV, maxV);
 
-    // gravity
     if (!p.onGround) p.vy += 0.62;
     p.vy = clamp(p.vy, -12, 12);
 
@@ -369,14 +785,22 @@
       p.onGround = true;
     }
 
-    // Shoot logic: shoot if roughly aligned and random aggression
     const aimY = (target.y - target.h*0.55) - (p.y - p.h*0.55);
-    const aligned = Math.abs(aimY) < 22; // since bullets go straight
-    const hasLine = Math.abs(dist) < 520; // range
-    const wants = Math.random() < (0.05 + 0.08*p.ai.aggression);
+    const aligned = Math.abs(aimY) < 22;
+    const hasLine = Math.abs(dist) < 520;
+    const wants = Math.random() < (0.04 + 0.09*p.ai.aggression);
 
     if (p.cd > 0) p.cd--;
     if (aligned && hasLine && wants) shoot(p);
+  }
+
+  function calcPointsIfPlayerWins() {
+    // daha iyi skor = daha az AI puanı yedir + daha çok canla bitir + daha zor difficulty
+    const diffBonus = DIFF[difficulty].bonus;
+    const margin = (5 - bot.score);          // 5:0 en iyi
+    const hpBonus = Math.max(0, Math.round(p1.hp)); // final round HP
+    const points = diffBonus + margin * 120 + hpBonus;
+    return points;
   }
 
   function updateBullets() {
@@ -403,12 +827,21 @@
         if (target.hp <= 0) {
           const winner = (target === p1) ? bot : p1;
 
-          // point
           if (winner.score >= 4) {
             winner.score++;
             running = false;
+
             statusEl.textContent = `Match over — Final ${p1.score}:${bot.score}`;
-            showOverlay(winner === p1 ? "win" : "lose");
+
+            const playerWon = (winner === p1);
+            showOverlay(playerWon ? "win" : "lose");
+
+            // ✅ Save leaderboard only if player wins
+            if (playerWon) {
+              const pts = calcPointsIfPlayerWins();
+              submitScore(playerName, pts, difficulty, `${p1.score}:${bot.score}`);
+              statusEl.textContent = `Saved score: ${pts} pts — Final ${p1.score}:${bot.score} (${difficulty.toUpperCase()})`;
+            }
           } else {
             resetRound(winner);
           }
@@ -434,7 +867,6 @@
     const x = p.x, y = p.y;
     const bodyTop = y - p.h;
 
-    // hover ring
     ctx.save();
     ctx.shadowColor = p.color;
     ctx.shadowBlur = 18;
@@ -448,7 +880,6 @@
     ctx.save();
     ctx.translate(x, bodyTop + 14);
 
-    // head
     ctx.save();
     ctx.shadowColor = p.color;
     ctx.shadowBlur = 16;
@@ -461,7 +892,6 @@
     ctx.stroke();
     ctx.restore();
 
-    // visor
     ctx.save();
     ctx.fillStyle = "rgba(0,229,255,0.10)";
     ctx.beginPath();
@@ -469,7 +899,6 @@
     ctx.fill();
     ctx.restore();
 
-    // body
     ctx.save();
     ctx.strokeStyle = neon.white;
     ctx.globalAlpha = 0.8;
@@ -480,12 +909,10 @@
     ctx.stroke();
     ctx.restore();
 
-    // arm + gun
     const armY = 16;
     const gunX = p.face * 14;
     glowLine(0, armY, gunX, armY, p.color, 2);
 
-    // legs
     ctx.save();
     ctx.strokeStyle = neon.white;
     ctx.globalAlpha = 0.7;
@@ -496,7 +923,6 @@
     ctx.stroke();
     ctx.restore();
 
-    // label
     ctx.save();
     ctx.fillStyle = neon.white;
     ctx.globalAlpha = 0.85;
@@ -505,20 +931,13 @@
     ctx.fillText(label, 0, -16);
     ctx.restore();
 
-    // HP tiny pip glow when low
-    if (p.hp <= 28) {
-      ctx.save();
-      ctx.globalAlpha = 0.85;
-      glowLine(-10, -10, 10, -10, neon.red, 2);
-      ctx.restore();
-    }
+    if (p.hp <= 28) glowLine(-10, -10, 10, -10, neon.red, 2);
 
     ctx.restore();
   }
 
   function drawUI() {
     const barW = 220, barH = 10;
-
     function hpBar(x, y, hp, color) {
       ctx.save();
       ctx.fillStyle = "rgba(234,247,255,0.08)";
@@ -533,7 +952,6 @@
       ctx.fillRect(x, y, barW * ratio, barH);
       ctx.restore();
     }
-
     hpBar(14, 14, p1.hp, p1.color);
     hpBar(W()-14-barW, 14, bot.hp, bot.color);
 
@@ -541,7 +959,7 @@
     ctx.fillStyle = neon.white;
     ctx.globalAlpha = 0.92;
     ctx.font = "14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
-    ctx.fillText(`${p1.label} ${p1.score}`, 14, 46);
+    ctx.fillText(`${playerName} ${p1.score}`, 14, 46);
     ctx.textAlign = "right";
     ctx.fillText(`AI ${bot.score}`, W()-14, 46);
     ctx.restore();
@@ -557,7 +975,6 @@
     for (const s of stars) {
       s.x -= s.s;
       if (s.x < -2) { s.x = W()+2; s.y = Math.random()*H(); }
-
       ctx.save();
       ctx.fillStyle = "rgba(234,247,255,0.7)";
       ctx.globalAlpha = 0.25 + 0.25*Math.sin((t*0.002)+(s.y*0.01));
@@ -566,7 +983,6 @@
       ctx.fill();
       ctx.restore();
     }
-
     glowLine(0, H()-18, W(), H()-18, neon.cyan, 2);
   }
 
@@ -584,8 +1000,36 @@
     }
   }
 
-  let running = true;
+  // ---- Start / Running ----
+  let running = false;
 
+  function startGame(){
+    if (musicOn) startMusic();
+
+    const v = (menuName.value || "").trim();
+    playerName = v.length ? v.slice(0,12) : "P1";
+
+    startMenu.classList.add("hidden");
+    hideOverlay();
+    running = true;
+
+    resetMatch();
+    statusEl.textContent = `Good luck, ${playerName}! First to 5 wins. (${difficulty.toUpperCase()})`;
+  }
+
+  startBtn.addEventListener("click", startGame);
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      if (!startMenu.classList.contains("hidden")) startGame();
+    }
+  });
+
+  // ---- Initial ----
+  setDifficulty("easy");
+  setMusic(true);
+  updatePodiumUI();
+
+  // loop
   function loop(now) {
     drawBackground(now);
 
@@ -596,7 +1040,7 @@
     }
 
     drawBullets();
-    drawPlayer(p1, p1.label);
+    drawPlayer(p1, playerName);
     drawPlayer(bot, "AI");
     drawUI();
 
