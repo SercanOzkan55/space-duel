@@ -1,4 +1,5 @@
-![Neon Space Duel — AI Banner](./assets/banner.png)
+![Neon Space Duel — AI Banner](./assets.png)
+
 
 # 🚀 Neon Space Duel — AI
 
