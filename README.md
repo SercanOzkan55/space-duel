@@ -1,81 +1,90 @@
-![Neon Space Duel — AI Banner](./assets.png)
+# Neon Space Duel — VS AI
 
+![Neon Space Duel Banner](assets.png)
 
-# 🚀 Neon Space Duel — AI
+A neon-lit 2D space duel where **you fight an AI** with lasers and jumps.  
+Fast rounds, clean UI, and a **local Top 3 podium** that saves your best wins.
 
-A neon-styled mini arcade shooter in a **single file** (**index.html**).  
-You play as the only player — the opponent is an **AI bot**.
-
-> No blood, just lasers ✨
-
----
-
-## 🎮 Play (GitHub Pages)
-Enable GitHub Pages in:
-**Repo → Settings → Pages**  
-Then open the published link.
+**Play here (GitHub Pages):** https://sercanozkan55.github.io/space-duel/
 
 ---
 
-## 🕹️ Controls
-- **W A S D** — Move  
-- **Space** — Jump  
-- **F** — Shoot  
-- **Enter** — Start (on the start menu)
+## 🎮 How to Play
+
+### Controls
+- **A / D** — Move
+- **Space** — Jump
+- **F** — Shoot
+- **Enter** — Start (from the start menu)
+
+### Goal
+- **First to 5 wins** takes the match.
+- You’ll get a **WIN / LOSE / DRAW** end screen.
+- **DRAW** happens when both sides go down at the same time.
 
 ---
 
-## ✨ Features
-- ✅ **AI Enemy** (single-player vs bot)
-- ✅ **Start Menu** (name + difficulty + press Enter)
-- ✅ **Difficulty**: Easy / Normal / Hard
-- ✅ **Music Toggle** (WebAudio synth — no external files)
-- ✅ **Win / Lose overlay** + Restart
-- ✅ **Top 3 Podium (Local Leaderboard)**  
-  Scores are stored in your browser via `localStorage`.
+## 🧠 Difficulty & Scoring
+Choose a difficulty in the start menu:
 
-> Note: The leaderboard is **not global**. Different devices/browsers have separate boards.
+- **Easy / Normal / Hard**
+- Hard makes the AI more aggressive and harder to dodge.
 
----
+**Scoring (leaderboard):**
+- Scores are saved **only when the player wins**.
+- The **Top 3 podium is local** (stored in your browser using `localStorage`).
+- Click **Reset leaderboard** to clear it.
 
-## 🏆 Scoring
-Scores are saved **only when you win**.  
-Points are calculated from difficulty + win margin + final-round HP (bonus).
+> Note: Because it’s local, other people won’t see your scores unless they play on the same device/browser.
 
 ---
 
-## 🧩 Tech
-- HTML5 Canvas
-- Vanilla JavaScript
-- CSS (Neon UI)
-- **Single-file build:** `index.html`
+## 🎵 Music
+The game includes built-in music using **WebAudio** (no external files).
+- Toggle **Music: ON/OFF** from the UI.
 
 ---
 
-## ▶️ Run Locally
-No build needed:
-1. Download / clone the repo
-2. Open `index.html` in your browser ✅
+## 📸 Screenshots
+
+> Replace the placeholders below with your own screenshots.
+
+### Start Menu
+![Start Menu](./screenshots/start-menu.png)
+
+### Gameplay
+![Gameplay](./screenshots/gameplay.png)
+
+### Win / Lose Screen
+![Win Lose](./screenshots/result.png)
 
 ---
 
-## 🖼️ Banner Setup
-Place your banner image here:
+## 🚀 Deploying on GitHub Pages
 
-- `assets/banner.png`
+1. Go to **Repo → Settings → Pages**
+2. **Source:** Deploy from a branch  
+3. **Branch:** `main`  
+4. **Folder:** `/ (root)`  
+5. Save — your site will be available at:
+   `https://<username>.github.io/<repo>/`
 
-Recommended size:
-- **1500×500** (classic GitHub repo banner)
-or
-- **1280×640** (works great too)
+---
+
+## 🛠 Tech
+- Single-file **HTML + Canvas**
+- Styling included inside the same `index.html`
+- `localStorage` for the Top 3 podium
 
 ---
 
-## 🔥 Next Ideas
-- Global leaderboard (Firebase / Supabase)
-- SFX (shoot / hit / win)
-- Pause menu (P)
-- Mobile touch controls
+## 📌 Notes / Future Ideas
+- Online global leaderboard (requires a backend)
+- More weapons & power-ups
+- Smarter AI patterns
 
 ---
-Made with lasers ✨
+
+### License
+MIT (optional — add a `LICENSE` file if you want)
+
